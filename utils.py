@@ -1,3 +1,4 @@
+# Functions to replace text in a docx file
 from docx import Document
 
 def replace_text_in_paragraph(paragraph, start_pos, end_pos, replace_text):

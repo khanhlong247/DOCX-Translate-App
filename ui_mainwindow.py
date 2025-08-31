@@ -1,3 +1,4 @@
+# UI
 import sys
 from io import BytesIO
 from PyQt5.QtWidgets import (

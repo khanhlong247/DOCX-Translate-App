@@ -1,3 +1,4 @@
+# Translate columns in docx file
 import os
 import re
 import tempfile

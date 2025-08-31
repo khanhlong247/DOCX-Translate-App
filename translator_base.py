@@ -1,3 +1,4 @@
+# Translator Base
 from google.cloud import translate_v2 as translate
 
 class TranslatorBase:
