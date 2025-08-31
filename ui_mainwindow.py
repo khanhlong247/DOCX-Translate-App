@@ -20,7 +20,7 @@ def _norm_key(s: str) -> str:
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DOCX Translator App (1-column layout)")
+        self.setWindowTitle("DOCX Translator App")
         self.setGeometry(100, 100, 1200, 800)
 
         # --- UI ---
