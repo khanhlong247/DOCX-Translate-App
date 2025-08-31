@@ -1,0 +1,10 @@
+python-docx
+googletrans==4.0.0-rc1
+google-cloud-translate
+PyQt5
+PyQtWebEngine
+pypandoc
+mammoth
+beautifulsoup4
+pymupdf
+html2docx
