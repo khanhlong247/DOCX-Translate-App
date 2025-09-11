@@ -9,7 +9,10 @@ from bs4 import BeautifulSoup
 import mammoth
 from docx.document import Document as DocxDocument
 from translator_base import TranslatorBase
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
 class TranslatorColumns(TranslatorBase):
     def __init__(self, credential_json="translate-tool.json"):
@@ -97,39 +100,45 @@ class TranslatorColumns(TranslatorBase):
             style_tag.string = cleaned_css
 
     def _normalize_floats_and_absolute(self, soup: BeautifulSoup):
-        bad_props = re.compile(
+            # Giữ float và clear cho img, figure, table để tránh làm vỡ layout LaTeX
+        bad_props_all = re.compile(
             r"(?:^|;)\s*(?:"
-            r"(?:-webkit-)?position|top|left|right|bottom|z-index|float|clear|"
+            r"(?:-webkit-)?position|top|left|right|bottom|z-index|"
             r"text-wrap|wrap-(?:flow|through|margin|distance)|"
             r"mso-position-[^:;]+|mso-wrap-[^:;]+"
             r")\s*:\s*[^;]+;?",
             re.IGNORECASE,
         )
+        bad_props_text_only = re.compile(
+            r"(?:^|;)\s*(?:float|clear)\s*:\s*[^;]+;?",
+            re.IGNORECASE,
+        )
 
-        def _clean_style(style: str) -> str:
+        def _clean_style(style: str, is_text_tag: bool) -> str:
             if not style:
                 return style
-            s = re.sub(bad_props, ";", style)
+            s = re.sub(bad_props_all, ";", style)
+            if is_text_tag:
+                s = re.sub(bad_props_text_only, ";", s)
             s = re.sub(r";{2,}", ";", s).strip(" ;")
             return s
 
-        candidate_tags = soup.find_all(
-            lambda t: t.has_attr("style") and t.name in ("img", "figure", "svg", "object", "span", "div")
-        )
-        for tag in candidate_tags:
+        # Áp dụng cho tất cả tags có style
+        for tag in soup.find_all(style=True):
+            is_text_tag = tag.name in ("span", "div", "p")  # Chỉ remove float cho text tags
             style = tag.get("style", "")
-            cleaned = _clean_style(style)
+            cleaned = _clean_style(style, is_text_tag)
             if cleaned:
                 tag["style"] = cleaned
             else:
                 del tag["style"]
 
+        # Giữ additions cho img/figure/svg/object, nhưng không override float
         for tag in soup.find_all(["img", "figure", "svg", "object"]):
             existing = tag.get("style", "")
             additions = [
-                "display:block",
-                "position:static",
-                "float:none",
+                "display:block",  # Mặc định block, nhưng nếu có float sẽ override
+                "position:static !important",  # Chỉ static nếu không cần absolute
                 "z-index:auto",
                 "top:auto", "left:auto", "right:auto", "bottom:auto",
                 "max-width:100%",
@@ -138,21 +147,19 @@ class TranslatorColumns(TranslatorBase):
             merged = ";".join([s for s in (existing, ";".join(additions)) if s]).strip(";")
             tag["style"] = merged
 
+        # Extra CSS: Không override float cho img/figure/table
         extra_css = soup.new_tag("style")
         extra_css.string = """
-            *[style*="position"], *[style*="float"], *[style*="z-index"] {
+            *[style*="position"]:not(img):not(figure):not(table) {
                 position: static !important;
-                float: none !important;
                 z-index: auto !important;
                 top: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
             }
-            img, figure, svg, object {
-                position: static !important;
-                float: none !important;
+            img, figure, svg, object, table {
                 z-index: auto !important;
                 max-width: 100%;
                 height: auto;
-                display: block;
+                display: block;  /* Có thể override bằng float nếu có */
             }
         """
         if soup.head:
@@ -205,6 +212,19 @@ class TranslatorColumns(TranslatorBase):
             head_tag.append(base_css)
             soup.insert(0, head_tag)
 
+        # Add MathJax for rendering MathML equations
+        mathjax_script = soup.new_tag("script")
+        mathjax_script["src"] = os.getenv("MATHJAX_SRC")
+        mathjax_script["async"] = os.getenv("MATHJAX_ASYNC", "true")
+        mathjax_script["integrity"] = os.getenv("MATHJAX_INTEGRITY")
+        mathjax_script["crossorigin"] = os.getenv("MATHJAX_CROSSORIGIN", "anonymous")
+        if soup.head:
+            soup.head.append(mathjax_script)
+        else:
+            head_tag = soup.new_tag("head")
+            head_tag.append(mathjax_script)
+            soup.insert(0, head_tag)
+        
         try:
             self._last_html_plain = soup.get_text().replace("\r\n", "\n").replace("\r", "\n")
         except Exception:

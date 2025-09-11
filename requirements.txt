@@ -8,3 +8,4 @@ mammoth
 beautifulsoup4
 pymupdf
 html2docx
+dotenv
